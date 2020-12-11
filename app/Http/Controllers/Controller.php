@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Category;
+use App\Models\Comment;
 use App\Models\Event;
 use App\Models\Location;
 use App\Models\User;
@@ -153,7 +154,7 @@ class Controller extends BaseController
             $query->whereHas('categories', function ($query1) use($cat_id){
                 $query1->where('category_id', $cat_id);
             });
-        })
+        })->with('comments.user')
             ->paginate(10);
 
         return compact('events');
@@ -174,4 +175,40 @@ class Controller extends BaseController
         }
         return compact('event');
     }
+
+    public function edit_event(Request $request, $id){
+        $event = Event::find($id);
+        $event->title = $request->title;
+        $event->description = $request->description;
+        $event->date = $request->date;
+        $event->location_id = $request->location_id;
+        $event->save();
+        $event->event_categories()->delete();
+        if($request->categories){
+            foreach ($request->categories as $category){
+                $event->event_categories()->create(['category_id'=>$category]);
+            }
+        }
+        return compact('event');
+    }
+
+    public function delete_event(Request $request, $id){
+        $event = Event::find($id);
+        $event->event_categories()->delete();
+        $event->delete();
+        return ['success'=>'Y'];
+    }
+
+    public function add_comment(Request $request, $id){
+        $user = Auth::user();
+        $comment = new Comment();
+        $comment->event_id = $id;
+        $comment->user_id = $user->id;
+        $comment->text = $request->text;
+        $comment->save();
+
+        return compact('comment');
+    }
+
+
 }
