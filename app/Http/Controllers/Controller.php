@@ -154,7 +154,7 @@ class Controller extends BaseController
             $query->whereHas('categories', function ($query1) use($cat_id){
                 $query1->where('category_id', $cat_id);
             });
-        })->with('comments.user')
+        })
             ->paginate(10);
 
         return compact('events');
@@ -210,5 +210,10 @@ class Controller extends BaseController
         return compact('comment');
     }
 
+    public function get_event(Request $request, $id){
+        $event = Event::find($id);
+        $event->load('comments.user');
 
+        return compact('event');
+    }
 }
