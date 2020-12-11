@@ -13,6 +13,10 @@ class Event extends Model
         return $this->belongsTo(Location::class);
     }
 
+    public function event_categories(){
+        return $this->hasMany(EventCategory::class);
+    }
+
     public function categories(){
         return $this->belongsToMany(Category::class, 'event_categories', 'event_id', 'category_id');
     }
