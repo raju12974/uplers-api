@@ -13,6 +13,7 @@ use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 
 class Controller extends BaseController
 {
@@ -27,7 +28,7 @@ class Controller extends BaseController
 
             $data['access_token'] = $token;
             $data['user'] =$user->only('id', 'name', 'email', 'username');
-            $data['admin'] = $user->is_admin=='y'?'Y':'N';
+            $data['admin'] = $user->is_admin;
             $data['success'] = 'Y';
             return $data;
         }else{
@@ -61,12 +62,13 @@ class Controller extends BaseController
             $user = new User();
             $user->name = $request->name;
             $user->email = $email;
-            $user->password = $request->password;
+            $user->password = Hash::make($request->password);
             $user->save();
 
             $data['success'] = 'Y';
             $token = $user->createToken('Token Name')->accessToken;
 
+            $data['admin'] = $user->is_admin;
             $data['access_token'] = $token;
             $data['user'] =$user->only('id', 'name', 'email', 'username');
             return $data;
@@ -75,7 +77,10 @@ class Controller extends BaseController
 
     public function get_categories(Request $request){
         $user = Auth::user();
-        $categories = Category::withCount('events')->get();
+        $categories = Category::withCount('events')->get()->map(function ($category){
+            $category->selected = false;
+            return $category;
+        });
         return compact('categories');
     }
 
@@ -115,6 +120,7 @@ class Controller extends BaseController
         $user = Auth::user();
         $location = new Location();
         $location->name = $request->name;
+        $location->created_by = $user->id;
         $location->save();
 
         $location->events_count = 0;
@@ -154,13 +160,19 @@ class Controller extends BaseController
             $query->whereHas('categories', function ($query1) use($cat_id){
                 $query1->where('category_id', $cat_id);
             });
-        })
+        })->with('location:id,name')->with('categories:id,category_name')
             ->paginate(10);
 
-        return compact('events');
+        return $events;
     }
 
     public function add_event(Request $request){
+
+        $check_exists = Event::where('title', $request->title)->first();
+        if($check_exists){
+            return ['success'=>'N', 'msg'=>'Event already exists with the title.'];
+        }
+
         $event = new Event();
         $event->title = $request->title;
         $event->description = $request->description;
@@ -170,10 +182,12 @@ class Controller extends BaseController
 
         if($request->categories){
             foreach ($request->categories as $category){
-                $event->event_categories()->create(['category_id'=>$category]);
+                if($category['selected']){
+                    $event->event_categories()->create(['category_id'=>$category['id']]);
+                }
             }
         }
-        return compact('event');
+        return ['success'=>'Y'];
     }
 
     public function edit_event(Request $request, $id){
@@ -206,14 +220,15 @@ class Controller extends BaseController
         $comment->user_id = $user->id;
         $comment->text = $request->text;
         $comment->save();
-
+        $comment->load('user');
         return compact('comment');
     }
 
     public function get_event(Request $request, $id){
         $event = Event::find($id);
+        $event->load('categories')->load('location');
         $event->load('comments.user');
 
-        return compact('event');
+        return $event;
     }
 }
