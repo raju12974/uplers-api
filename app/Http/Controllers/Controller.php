@@ -137,7 +137,7 @@ class Controller extends BaseController
 
     public function delete_location(Request $request, $id){
         $location = Location::find($id);
-        if($location->events_count >0){
+        if($location->events->count() >0){
             return ['success'=>'N', 'msg'=>'Some events are using this location'];
         }
         $location->delete();
@@ -153,7 +153,7 @@ class Controller extends BaseController
         $events = Event::when($date, function ($query) use($date){
             $query->where('date', $date);
         })->when($name, function ($query)use($name){
-            $query->where('name', 'Like', '%'.$name.'%');
+            $query->where('title', 'Like', '%'.$name.'%');
         })->when($location_id, function ($query) use($location_id){
             $query->where('location_id', $location_id);
         })->when($cat_id, function ($query) use($cat_id){
@@ -161,9 +161,12 @@ class Controller extends BaseController
                 $query1->where('category_id', $cat_id);
             });
         })->with('location:id,name')->with('categories:id,category_name')
-            ->paginate(10);
+            ->get();
 
-        return $events;
+
+        $locations = Location::all();
+        $categories = Category::all();
+        return compact('events', 'locations', 'categories');
     }
 
     public function add_event(Request $request){
@@ -200,10 +203,12 @@ class Controller extends BaseController
         $event->event_categories()->delete();
         if($request->categories){
             foreach ($request->categories as $category){
-                $event->event_categories()->create(['category_id'=>$category]);
+                if($category['selected']) {
+                    $event->event_categories()->create(['category_id' => $category['id']]);
+                }
             }
         }
-        return compact('event');
+        return ['success'=>'Y'];
     }
 
     public function delete_event(Request $request, $id){
@@ -230,5 +235,18 @@ class Controller extends BaseController
         $event->load('comments.user');
 
         return $event;
+    }
+
+    public function get_event_for_update(Request $request, $id){
+        $event = Event::find($id);
+        $event_categories = $event->event_categories()->pluck('category_id');
+
+        $locations = Location::all(['id', 'name']);
+        $categories = Category::all(['id', 'category_name'])->map(function ($cat) use($event_categories){
+            $cat->selected = $event_categories->contains($cat->id);
+            return $cat;
+        });
+
+        return compact('event', 'locations', 'categories');
     }
 }
